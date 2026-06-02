@@ -1,0 +1,13 @@
+# 核心深度学习框架
+torch>=2.0.0
+ultralytics>=8.0.0
+
+# 图像处理
+opencv-python>=4.8.0
+numpy>=1.23.0
+Pillow>=9.0.0
+
+# Web 界面（二选一，根据你的使用场景）
+gradio>=4.0.0          # 用于 web_app.py
+streamlit>=1.28.0      # 用于 streamlit_app.py
+
