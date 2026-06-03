@@ -152,9 +152,9 @@ if img_file_buffer is not None:
     else:
         st.info(msg)
 
-# ==================== 情况二：处理视频文件输入（🌟 修复：播放与大小问题） ====================
+# ==================== 情况二：处理视频文件输入（🌟 终极修复：解决网络堵塞不播放问题） ====================
 elif video_file_buffer is not None:
-    import time  # 🌟 新增：导入时间库来控制视频播放速度
+    import time  # 确保导入了时间库
     st.write("---")
     st.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在火眼金睛解析视频中...</h3>", unsafe_allow_html=True)
     
@@ -166,20 +166,28 @@ elif video_file_buffer is not None:
     # 2. 使用 OpenCV 打开这个视频文件
     cap = cv2.VideoCapture(tfile.name)
     
-    # 3. 页面排版：🌟 修改这里的比例！左右留白 1.5，中间视频只占 1，视频窗口会明显缩小
+    # 3. 页面排版：左右留白 1.5，中间视频只占 1（保持精致的小窗口）
     v_spacer_l, v_col, v_spacer_r = st.columns([1.5, 1, 1.5])
     
     with v_col:
-        # 创建一个空容器占位符
         video_placeholder = st.empty()
-        # 创建一个空容器占位符，用来实时刷新当前的裁判播报状态
         status_placeholder = st.empty()
+    
+    # 🌟 新增：引入帧数计数器
+    frame_count = 0
     
     # 4. 逐帧读取并进行 YOLO 实时检测
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break  # 视频读完时自动退出循环
+            
+        frame_count += 1
+        
+        # 🌟 核心魔法：抽帧处理！每 3 帧才挑选 1 帧进行 AI 识别和网页刷新。
+        # 这样可以把传输的数据量瞬间砍掉 66%，彻底解决国际网络传输堵塞的问题，让画面真正连贯动起来！
+        if frame_count % 3 != 0:
+            continue
             
         # 运行 YOLO 模型
         results = model(frame, conf=0.5, iou=0.4, verbose=False)
@@ -188,22 +196,21 @@ elif video_file_buffer is not None:
         res_frame_bgr = results[0].plot()
         res_frame_rgb = cv2.cvtColor(res_frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # 将动态图片丢进占位符
+        # 将动态图片丢进占位符，在网页上刷新
         video_placeholder.image(res_frame_rgb, use_column_width=True, caption="AI 实时视频追踪处理")
         
-        # 🌟 核心修复：每渲染完一帧，强制让服务器歇 0.03 秒（相当于 30 帧/秒的正常电影速度）
-        # 这样网络才有时间把画面源源不断地推送到你的手机或电脑浏览器上，形成流畅的动态播放！
-        time.sleep(0.03)
+        # 🌟 关键微调：给网络留出 0.05 秒的喘息时间，确保每一帧都能稳稳传到你的浏览器上
+        time.sleep(0.05)
         
         # 5. 在视频下方实时更新“裁判的碎碎念”
         boxes = results[0].boxes
         num_hands = len(boxes)
         
         if num_hands == 0:
-            status_placeholder.info("🤔 当前帧：还没抓捕到有效手势，快把手伸出来呀...")
+            status_placeholder.info("🤔 视频分析中：还没抓捕到手势，快把手伸出来呀...")
         elif num_hands == 1:
             cls_id = int(boxes.cls[0].item())
-            status_placeholder.success(f"🤖 AI 裁判盯着你：画面中只有 1 人，你当前出的是【{gesture_dict[cls_id]}】！")
+            status_placeholder.success(f"🤖 AI 裁判盯着你：画面中出了【{gesture_dict[cls_id]}】！")
         elif num_hands == 2:
             box1, box2 = boxes[0], boxes[1]
             if box1.xyxy[0][0].item() < box2.xyxy[0][0].item():
@@ -211,9 +218,9 @@ elif video_file_buffer is not None:
             else:
                 l_cls, r_cls = int(box2.cls[0].item()), int(box1.cls[0].item())
             
-            status_placeholder.success(f"⚔️ 视频巅峰对决：左边选手【{gesture_dict[l_cls]}】 VS 右边选手【{gesture_dict[r_cls]}】")
+            status_placeholder.success(f"⚔️ 视频巅峰对决：左边【{gesture_dict[l_cls]}】 VS 右边【{gesture_dict[r_cls]}】")
         else:
-            status_placeholder.warning(f"😱 警告：当前画面检测到了 {num_hands} 只手！裁判眼花了！")
+            status_placeholder.warning(f"😱 警告：检测到了 {num_hands} 只手！裁判眼花了！")
             
     # 5. 视频播放完毕，释放内存资源并清理临时文件
     cap.release()
@@ -222,5 +229,6 @@ elif video_file_buffer is not None:
     except:
         pass
         
-    st.balloons()  # 播放完成时，全屏燃放成功气球！
+    st.balloons()  # 播放完成时全屏燃放成功气球！
     st.success("🎉 视频分析播放完成！")
+    
