@@ -152,7 +152,7 @@ if img_file_buffer is not None:
     else:
         st.info(msg)
 
-# ==================== 情况二：处理视频文件输入（🌟 终极丝滑流媒体优化版） ====================
+# ==================== 情况二：处理视频文件输入（🌟 终极丝滑：彻底解决幻灯片卡顿问题） ====================
 elif video_file_buffer is not None:
     import time  # 确保导入了时间库
     st.write("---")
@@ -166,7 +166,7 @@ elif video_file_buffer is not None:
     # 2. 使用 OpenCV 打开这个视频文件
     cap = cv2.VideoCapture(tfile.name)
     
-    # 3. 页面排版：左右留白 1.5，中间视频只占 1（保持精致的小窗口）
+    # 3. 页面排版：左右留白 1.5，中间视频只占 1
     v_spacer_l, v_col, v_spacer_r = st.columns([1.5, 1, 1.5])
     
     with v_col:
@@ -183,8 +183,8 @@ elif video_file_buffer is not None:
             
         frame_count += 1
         
-        # 🌟 优化一：改成每 2 帧处理 1 帧（原先是3帧），让画面动作更连贯、不突兀
-        if frame_count % 2 != 0:
+        # 🌟 优化一：每 3 帧处理 1 帧，从源头上把发送的数据包砍掉三分之二
+        if frame_count % 3 != 0:
             continue
             
         # 运行 YOLO 模型
@@ -194,18 +194,19 @@ elif video_file_buffer is not None:
         res_frame_bgr = results[0].plot()
         res_frame_rgb = cv2.cvtColor(res_frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # 🌟 优化二（核心修复）：把准备发往网页的图片动态缩小（等比例缩放到宽度 480 像素）
-        # 体积缩减 90% 以上，网络传输瞬间通畅，彻底解决卡顿跳帧问题！
+        # 🌟 优化二（核心绝招）：把图片宽度进一步等比例压缩到 360 像素
+        # 单张图片体积直接暴跌到十几 KB！网络管道再挤，它也能像泥鳅一样瞬间溜过去
         h, w, _ = res_frame_rgb.shape
-        new_w = 480
+        new_w = 360
         new_h = int(h * (new_w / w))
         resized_frame = cv2.resize(res_frame_rgb, (new_w, new_h))
         
-        # 将缩小后、传输极快的动态图片丢进占位符
+        # 将超轻量化、传输极快的动态图片丢进占位符刷新
         video_placeholder.image(resized_frame, use_column_width=True, caption="AI 实时视频流追踪")
         
-        # 配合抽帧给浏览器留出微小的渲染时间
-        time.sleep(0.02)
+        # 🌟 优化三（关键刹车）：把每帧等待时间拉长到 0.1 秒（100毫秒）
+        # 强行让远在海外的服务器“停步歇会”，等等你的网络。服务器发一帧，你的浏览器就能稳稳接住一帧！
+        time.sleep(0.1)
         
         # 5. 在视频下方实时更新“裁判的碎碎念”
         boxes = results[0].boxes
