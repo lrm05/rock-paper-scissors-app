@@ -152,24 +152,25 @@ if img_file_buffer is not None:
     else:
         st.info(msg)
 
-# ==================== 情况二：处理视频文件输入（🌟 全新新增） ====================
+# ==================== 情况二：处理视频文件输入（🌟 修复：播放与大小问题） ====================
 elif video_file_buffer is not None:
+    import time  # 🌟 新增：导入时间库来控制视频播放速度
     st.write("---")
     st.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在火眼金睛解析视频中...</h3>", unsafe_allow_html=True)
     
-    # 1. 建立临时文件，将用户上传的视频字节写入其中，以便 OpenCV 能够用路径读取
+    # 1. 建立临时文件
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(video_file_buffer.read())
-    tfile.close()  # 写入完毕，关闭文件句柄
+    tfile.close()  
     
     # 2. 使用 OpenCV 打开这个视频文件
     cap = cv2.VideoCapture(tfile.name)
     
-    # 3. 页面排版：左右留白，视频框居中缩小显示
-    v_spacer_l, v_col, v_spacer_r = st.columns([1, 2, 1])
+    # 3. 页面排版：🌟 修改这里的比例！左右留白 1.5，中间视频只占 1，视频窗口会明显缩小
+    v_spacer_l, v_col, v_spacer_r = st.columns([1.5, 1, 1.5])
     
     with v_col:
-        # 创建一个空容器占位符，用来在循环中不断刷新视频帧，形成播放动画
+        # 创建一个空容器占位符
         video_placeholder = st.empty()
         # 创建一个空容器占位符，用来实时刷新当前的裁判播报状态
         status_placeholder = st.empty()
@@ -180,15 +181,19 @@ elif video_file_buffer is not None:
         if not ret:
             break  # 视频读完时自动退出循环
             
-        # 运行 YOLO 模型对当前帧进行推理 (verbose=False 可以关闭控制台的大量日志打印，让运行更平滑)
+        # 运行 YOLO 模型
         results = model(frame, conf=0.5, iou=0.4, verbose=False)
         
-        # 绘制检测框和标签 (复用你原本的 plot 功能)
+        # 绘制检测框和标签
         res_frame_bgr = results[0].plot()
         res_frame_rgb = cv2.cvtColor(res_frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # 🌟 核心魔法：将动态图片丢进占位符，实现视频播放效果
+        # 将动态图片丢进占位符
         video_placeholder.image(res_frame_rgb, use_column_width=True, caption="AI 实时视频追踪处理")
+        
+        # 🌟 核心修复：每渲染完一帧，强制让服务器歇 0.03 秒（相当于 30 帧/秒的正常电影速度）
+        # 这样网络才有时间把画面源源不断地推送到你的手机或电脑浏览器上，形成流畅的动态播放！
+        time.sleep(0.03)
         
         # 5. 在视频下方实时更新“裁判的碎碎念”
         boxes = results[0].boxes
@@ -200,7 +205,6 @@ elif video_file_buffer is not None:
             cls_id = int(boxes.cls[0].item())
             status_placeholder.success(f"🤖 AI 裁判盯着你：画面中只有 1 人，你当前出的是【{gesture_dict[cls_id]}】！")
         elif num_hands == 2:
-            # 简单按照画面中的左右水平位置排序
             box1, box2 = boxes[0], boxes[1]
             if box1.xyxy[0][0].item() < box2.xyxy[0][0].item():
                 l_cls, r_cls = int(box1.cls[0].item()), int(box2.cls[0].item())
