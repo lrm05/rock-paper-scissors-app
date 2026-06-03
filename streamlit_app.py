@@ -78,7 +78,8 @@ if img_file_buffer is not None:
 
     # 🌟 关键修改：在这里新建两列专门放图片，保证绝对水平对齐！
     # 同时把原来的 width=400 改成 use_column_width=True，让图片自动适应屏幕大小，更好看！
-    img_col1, img_col2 = st.columns(2)
+    # 🌟 左右各加一个空白列 (占位比例: 左空白1, 原图2, AI图2, 右空白1)
+    spacer_left, img_col1, img_col2, spacer_right = st.columns([1, 2, 2, 1])
 
     with img_col1:
         st.image(image_pil, caption="你的招式", use_column_width=True)
