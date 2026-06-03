@@ -152,93 +152,93 @@ if img_file_buffer is not None:
     else:
         st.info(msg)
 
-# ==================== 情况二：处理视频文件输入（🌟 终极完美修复版：解决状态卡死与播放卡顿） ====================
+# ==================== 情况二：处理视频文件输入（🌟 终极丝滑播放器版：彻底解决幻灯片卡顿） ====================
 elif video_file_buffer is not None:
-    import time  # 确保导入了时间库
+    import time  
     st.write("---")
     
-    # 🌟 修复问题一：用 st.empty() 创建一个动态标题魔术盒，让文字能随时改变
+    # 1. 创建动态标题魔术盒
     video_title_placeholder = st.empty()
-    video_title_placeholder.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在火眼金睛解析视频中...</h3>", unsafe_allow_html=True)
+    video_title_placeholder.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在全速解析并导出视频流...</h3>", unsafe_allow_html=True)
     
-    # 1. 建立临时文件
+    # 2. 建立临时输入文件
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(video_file_buffer.read())
     tfile.close()  
     
-    # 2. 使用 OpenCV 打开这个视频文件
+    # 3. 使用 OpenCV 打开视频并获取参数
     cap = cv2.VideoCapture(tfile.name)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    if fps == 0: fps = 24  # 防止部分视频获取不到FPS导致报错
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    # 3. 页面排边：左右留白 1.5，中间视频只占 1（精致小窗口）
-    v_spacer_l, v_col, v_spacer_r = st.columns([1.5, 1, 1.5])
+    # 4. 建立临时输出视频文件
+    out_tfile_path = tfile.name + "_out.mp4"
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # 临时使用标准 MP4 容器
+    out = cv2.VideoWriter(out_tfile_path, fourcc, fps, (width, height))
     
-    with v_col:
-        video_placeholder = st.empty()
-        status_placeholder = st.empty()
+    # 5. 创建高级感满满的动态进度条看板
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
     frame_count = 0
     
-    # 4. 逐帧读取并进行 YOLO 实时检测
+    # 6. 默默在后台一帧不漏地全速识别并写入新视频（不抽帧，画面才最完整流畅！）
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
-            break  # 视频读完时自动退出循环
+            break  
             
         frame_count += 1
         
-        # 🌟 修复问题二（连贯度）：改成每 2 帧处理 1 帧（原先是3帧），动作细节直接翻倍，不再有巨大的跳跃感
-        if frame_count % 2 != 0:
-            continue
-            
-        # 运行 YOLO 模型
+        # 运行 YOLO 模型进行推理
         results = model(frame, conf=0.5, iou=0.4, verbose=False)
         
         # 绘制检测框和标签
         res_frame_bgr = results[0].plot()
-        res_frame_rgb = cv2.cvtColor(res_frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # 🌟 修复问题二（体积压制）：把宽度定在黄金比例 400 像素
-        # 图片体积变小后，网络传输再也不会“塞车堵死”
-        h, w, _ = res_frame_rgb.shape
-        new_w = 400
-        new_h = int(h * (new_w / w))
-        resized_frame = cv2.resize(res_frame_rgb, (new_w, new_h))
+        # 将带框的画面写入视频文件
+        out.write(res_frame_bgr)
         
-        # 将动态图片丢进占位符在网页上刷新
-        video_placeholder.image(resized_frame, use_column_width=True, caption="AI 实时视频流追踪")
-        
-        # 🌟 修复问题二（速度催化）：把等待时间缩短到 0.01 秒，让画面源源不断高频顶上去，彻底消除卡顿
-        time.sleep(0.01)
-        
-        # 5. 在视频下方实时更新“裁判的碎碎念”
-        boxes = results[0].boxes
-        num_hands = len(boxes)
-        
-        if num_hands == 0:
-            status_placeholder.info("🤔 视频分析中：还没抓捕到手势，快把手伸出来呀...")
-        elif num_hands == 1:
-            cls_id = int(boxes.cls[0].item())
-            status_placeholder.success(f"🤖 AI 裁判盯着你：画面中出了【{gesture_dict[cls_id]}】！")
-        elif num_hands == 2:
-            box1, box2 = boxes[0], boxes[1]
-            if box1.xyxy[0][0].item() < box2.xyxy[0][0].item():
-                l_cls, r_cls = int(box1.cls[0].item()), int(box2.cls[0].item())
-            else:
-                l_cls, r_cls = int(box2.cls[0].item()), int(box1.cls[0].item())
+        # 实时刷新进度条
+        percent = min(int((frame_count / total_frames) * 100), 100)
+        progress_bar.progress(percent)
+        status_text.markdown(f"<p style='text-align: center; color: #666;'>⚡ 正在精细追踪第 <b>{frame_count}</b> / {total_frames} 帧 ({percent}%)</p>", unsafe_allow_html=True)
             
-            status_placeholder.success(f"⚔️ 视频巅峰对决：左边【{gesture_dict[l_cls]}】 VS 右边【{gesture_dict[r_cls]}】")
-        else:
-            status_placeholder.warning(f"😱 警告：检测到了 {num_hands} 只手！裁判眼花了！")
-            
-    # 5. 视频播放完毕，释放内存资源并清理临时文件
+    # 释放视频资源
     cap.release()
+    out.release()
+    
+    # 7. 🌟 核心魔法转换：因为 OpenCV 导出的视频编码浏览器通常无法直接播放
+    # 咱们调用服务器自带的 ffmpeg 把它一秒转换成网页通用的 H.264 编码
+    web_ready_path = tfile.name + "_ready.mp4"
+    import os
+    os.system(f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 {web_ready_path}")
+    
+    # 8. 清理进度条组件，把视频用网页内置播放器优美地放出来
+    progress_bar.empty()
+    status_text.empty()
+    video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ AI 裁判全片解析渲染完毕！</h3>", unsafe_allow_html=True)
+    
+    # 居中缩小展示精美的原生播放器
+    v_spacer_l, v_col, v_spacer_r = st.columns([1, 2, 1])
+    with v_col:
+        # 如果转换成功就播网页专用格式，否则播原格式
+        final_path = web_ready_path if os.path.exists(web_ready_path) else out_tfile_path
+        with open(final_path, "rb") as f:
+            video_bytes = f.read()
+        # 调用原生 HTML5 播放器，纵享丝滑！
+        st.video(video_bytes)
+            
+    # 9. 彻底清理所有临时文件，不占服务器内存
     try:
         os.unlink(tfile.name)
+        os.unlink(out_tfile_path)
+        os.unlink(web_ready_path)
     except:
         pass
         
-    # 🌟 修复问题一（终领绝杀）：循环彻底结束后，强行把最上面的“正在分析中...”擦掉，换成成功提示！
-    video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ 视频分析已全部完成！</h3>", unsafe_allow_html=True)
-    
     st.balloons()  # 全屏燃放成功气球！
-    st.success("🎉 视频分析播放完成！")
+    st.success("🎉 奇迹见证！快点击上方播放按钮看看吧！")
