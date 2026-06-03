@@ -152,11 +152,14 @@ if img_file_buffer is not None:
     else:
         st.info(msg)
 
-# ==================== 情况二：处理视频文件输入（🌟 终极丝滑：彻底解决幻灯片卡顿问题） ====================
+# ==================== 情况二：处理视频文件输入（🌟 终极完美修复版：解决状态卡死与播放卡顿） ====================
 elif video_file_buffer is not None:
     import time  # 确保导入了时间库
     st.write("---")
-    st.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在火眼金睛解析视频中...</h3>", unsafe_allow_html=True)
+    
+    # 🌟 修复问题一：用 st.empty() 创建一个动态标题魔术盒，让文字能随时改变
+    video_title_placeholder = st.empty()
+    video_title_placeholder.markdown("<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在火眼金睛解析视频中...</h3>", unsafe_allow_html=True)
     
     # 1. 建立临时文件
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
@@ -166,7 +169,7 @@ elif video_file_buffer is not None:
     # 2. 使用 OpenCV 打开这个视频文件
     cap = cv2.VideoCapture(tfile.name)
     
-    # 3. 页面排版：左右留白 1.5，中间视频只占 1
+    # 3. 页面排边：左右留白 1.5，中间视频只占 1（精致小窗口）
     v_spacer_l, v_col, v_spacer_r = st.columns([1.5, 1, 1.5])
     
     with v_col:
@@ -183,8 +186,8 @@ elif video_file_buffer is not None:
             
         frame_count += 1
         
-        # 🌟 优化一：每 3 帧处理 1 帧，从源头上把发送的数据包砍掉三分之二
-        if frame_count % 3 != 0:
+        # 🌟 修复问题二（连贯度）：改成每 2 帧处理 1 帧（原先是3帧），动作细节直接翻倍，不再有巨大的跳跃感
+        if frame_count % 2 != 0:
             continue
             
         # 运行 YOLO 模型
@@ -194,19 +197,18 @@ elif video_file_buffer is not None:
         res_frame_bgr = results[0].plot()
         res_frame_rgb = cv2.cvtColor(res_frame_bgr, cv2.COLOR_BGR2RGB)
         
-        # 🌟 优化二（核心绝招）：把图片宽度进一步等比例压缩到 360 像素
-        # 单张图片体积直接暴跌到十几 KB！网络管道再挤，它也能像泥鳅一样瞬间溜过去
+        # 🌟 修复问题二（体积压制）：把宽度定在黄金比例 400 像素
+        # 图片体积变小后，网络传输再也不会“塞车堵死”
         h, w, _ = res_frame_rgb.shape
-        new_w = 360
+        new_w = 400
         new_h = int(h * (new_w / w))
         resized_frame = cv2.resize(res_frame_rgb, (new_w, new_h))
         
-        # 将超轻量化、传输极快的动态图片丢进占位符刷新
+        # 将动态图片丢进占位符在网页上刷新
         video_placeholder.image(resized_frame, use_column_width=True, caption="AI 实时视频流追踪")
         
-        # 🌟 优化三（关键刹车）：把每帧等待时间拉长到 0.1 秒（100毫秒）
-        # 强行让远在海外的服务器“停步歇会”，等等你的网络。服务器发一帧，你的浏览器就能稳稳接住一帧！
-        time.sleep(0.1)
+        # 🌟 修复问题二（速度催化）：把等待时间缩短到 0.01 秒，让画面源源不断高频顶上去，彻底消除卡顿
+        time.sleep(0.01)
         
         # 5. 在视频下方实时更新“裁判的碎碎念”
         boxes = results[0].boxes
@@ -235,5 +237,8 @@ elif video_file_buffer is not None:
     except:
         pass
         
-    st.balloons()  # 播放完成时全屏燃放成功气球！
+    # 🌟 修复问题一（终领绝杀）：循环彻底结束后，强行把最上面的“正在分析中...”擦掉，换成成功提示！
+    video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ 视频分析已全部完成！</h3>", unsafe_allow_html=True)
+    
+    st.balloons()  # 全屏燃放成功气球！
     st.success("🎉 视频分析播放完成！")
