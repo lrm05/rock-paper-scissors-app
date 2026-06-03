@@ -102,7 +102,7 @@ if img_file_buffer is not None:
             elif top_class == 1:
                 msg = "✂️ 你出了【剪刀】！那我出【石头】吧，我又赢啦！😎"
             elif top_class == 2:
-                msg = "🖐️ 你出了【布】！那我出【剪刀】... 等等，你赢了！😭"
+                msg = "🖐️ 你出了【布】！那我出【剪刀】，哈哈，我赢啦！🎉"
             msg_type = "info"
         elif num_hands == 2:
             box1, box2 = boxes[0], boxes[1]
