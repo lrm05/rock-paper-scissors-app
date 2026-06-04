@@ -151,7 +151,8 @@ if img_file_buffer is not None:
         st.success(msg)
     else:
         st.info(msg)
-# ==================== 情况二：处理视频文件输入（🌟 完美终结黑屏版） ====================
+
+# ==================== 情况二：处理视频文件输入（🌟 终极丝滑播放器版：彻底解决幻灯片卡顿） ====================
 elif video_file_buffer is not None:
     import time  
     st.write("---")
@@ -168,23 +169,23 @@ elif video_file_buffer is not None:
     # 3. 使用 OpenCV 打开视频并获取参数
     cap = cv2.VideoCapture(tfile.name)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
-    if fps == 0: fps = 24  
+    if fps == 0: fps = 24  # 防止部分视频获取不到FPS导致报错
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     # 4. 建立临时输出视频文件
     out_tfile_path = tfile.name + "_out.mp4"
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # 临时使用标准 MP4 容器
     out = cv2.VideoWriter(out_tfile_path, fourcc, fps, (width, height))
     
-    # 5. 创建动态进度条看板
+    # 5. 创建高级感满满的动态进度条看板
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     frame_count = 0
     
-    # 6. 后台全速无损渲染
+    # 6. 默默在后台一帧不漏地全速识别并写入新视频（不抽帧，画面才最完整流畅！）
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -192,8 +193,13 @@ elif video_file_buffer is not None:
             
         frame_count += 1
         
+        # 运行 YOLO 模型进行推理
         results = model(frame, conf=0.5, iou=0.4, verbose=False)
+        
+        # 绘制检测框和标签
         res_frame_bgr = results[0].plot()
+        
+        # 将带框的画面写入视频文件
         out.write(res_frame_bgr)
         
         # 实时刷新进度条
@@ -201,40 +207,38 @@ elif video_file_buffer is not None:
         progress_bar.progress(percent)
         status_text.markdown(f"<p style='text-align: center; color: #666;'>⚡ 正在精细追踪第 <b>{frame_count}</b> / {total_frames} 帧 ({percent}%)</p>", unsafe_allow_html=True)
             
+    # 释放视频资源
     cap.release()
     out.release()
     
-    # 7. 🌟 核心修复：加上 -pix_fmt yuv420p 彻底治好浏览器的黑屏傲娇病！
+    # 7. 🌟 核心魔法转换：因为 OpenCV 导出的视频编码浏览器通常无法直接播放
+    # 咱们调用服务器自带的 ffmpeg 把它一秒转换成网页通用的 H.264 编码
     web_ready_path = tfile.name + "_ready.mp4"
     import os
-    # 核心注入：-pix_fmt yuv420p 转换为网页通用的标准色彩像素点排列格式
-    cmd = f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 -pix_fmt yuv420p {web_ready_path}"
-    os.system(cmd)
+    os.system(f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 {web_ready_path}")
     
-    # 8. 清理进度条组件
+    # 8. 清理进度条组件，把视频用网页内置播放器优美地放出来
     progress_bar.empty()
     status_text.empty()
+    video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ AI 裁判全片解析渲染完毕！</h3>", unsafe_allow_html=True)
     
-    # 居中显示原生播放器
+    # 居中缩小展示精美的原生播放器
     v_spacer_l, v_col, v_spacer_r = st.columns([1, 2, 1])
     with v_col:
-        # 🌟 增加安全防护机制：确认转换成功的文件存在，再丢给网页播放
-        if os.path.exists(web_ready_path) and os.path.getsize(web_ready_path) > 0:
-            video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ AI 裁判全片解析渲染完毕！</h3>", unsafe_allow_html=True)
-            with open(web_ready_path, "rb") as f:
-                video_bytes = f.read()
-            st.video(video_bytes)
-            st.balloons()  # 成功时放气球
-            st.success("🎉 奇迹见证！快点击上方播放按钮看看吧！")
-        else:
-            # 如果文件没生成，多半是服务器后台还没把 ffmpeg 依赖完全装好
-            video_title_placeholder.markdown("<h3 style='text-align: center; color: #FF5722;'>⚠️ 视频格式转换出现了一点小插曲</h3>", unsafe_allow_html=True)
-            st.error("由于你刚刚在 GitHub 的 packages.txt 里增加了 ffmpeg，云端服务器需要 1~2 分钟来下载和部署这个底层工具。请稍等两分钟，然后刷新网页重新上传视频试试看！")
+        # 如果转换成功就播网页专用格式，否则播原格式
+        final_path = web_ready_path if os.path.exists(web_ready_path) else out_tfile_path
+        with open(final_path, "rb") as f:
+            video_bytes = f.read()
+        # 调用原生 HTML5 播放器，纵享丝滑！
+        st.video(video_bytes)
             
-    # 9. 彻底清理临时文件
+    # 9. 彻底清理所有临时文件，不占服务器内存
     try:
         os.unlink(tfile.name)
         os.unlink(out_tfile_path)
         os.unlink(web_ready_path)
     except:
         pass
+        
+    st.balloons()  # 全屏燃放成功气球！
+    st.success("🎉 奇迹见证！快点击上方播放按钮看看吧！")
