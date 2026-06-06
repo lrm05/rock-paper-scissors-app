@@ -226,7 +226,9 @@ elif video_file_buffer is not None:
     # 6. 🌟 核心魔法：由于 OpenCV 直接导出的视频编码，网页多半会黑屏拒绝播放。
     # 我们用系统内置的 ffmpeg 命令，一秒钟将其转码为网页通用的 H.264 编码和 yuv420p 色彩格式。
     web_ready_path = tfile.name + "_ready.mp4"
-    cmd = f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 -pix_fmt yuv420p {web_ready_path}"
+    # 🌟 新增：-movflags +faststart 让视频变成真正的“流媒体”，支持边下边播，拒绝转圈！
+    # 同时加上 -preset veryfast 稍微压缩一下体积，传输更快！
+    cmd = f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart {web_ready_path}"
     os.system(cmd)
 
     # 7. 清除已经跑满的进度条组件，还网页一片清净
