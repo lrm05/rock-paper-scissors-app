@@ -502,9 +502,13 @@ elif input_mode == "🌐 公网实时双屏画板":
         st.error("⚠️ 缺少通信模块！请务必在仓库里创建 requirements.txt 并写入 streamlit-webrtc")
         st.stop()
 
-    # 配置谷歌的公共 STUN 服务器，帮助公网穿透打通视频流
+    # 🌟 增强版配置：加入腾讯和多个备用 STUN 服务器，提高穿透成功率
     RTC_CONFIGURATION = RTCConfiguration(
-        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+        {"iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {"urls": ["stun:stun1.l.google.com:19302"]},
+            {"urls": ["stun:stun.qq.com:3478"]}  # 腾讯的公共服务器
+        ]}
     )
 
     # 🌟 定义 WebRTC 专属的视频处理器类
