@@ -25,6 +25,15 @@ def load_model():
 
 model = load_model()  # 实例化模型
 gesture_dict = {0: '石头', 1: '剪刀', 2: '布'}  # 建立一个数字到汉字的快捷字典
+# ==============================================================================
+# 🎮 【新增】RPG 游戏专用记忆变量（确保血量在刷新时不会丢失）
+# ==============================================================================
+if 'rpg_player_hp' not in st.session_state:
+    st.session_state.rpg_player_hp = 100  # 玩家初始血量
+if 'rpg_boss_hp' not in st.session_state:
+    st.session_state.rpg_boss_hp = 100    # 魔王初始血量
+if 'rpg_log' not in st.session_state:
+    st.session_state.rpg_log = "⚔️ 战斗开始！深渊魔王发出咆哮！请用手势结印攻击！"
 
 
 # ==============================================================================
@@ -70,7 +79,7 @@ st.write("---")
 # ==============================================================================
 # 4. 操作输入区（提供三种出招方式）
 # ==============================================================================
-input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件"], horizontal=True)
+input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "🧙‍♂️ 赛博魔法师 RPG 模式"], horizontal=True)
 
 img_file_buffer = None  
 video_file_buffer = None  
@@ -264,3 +273,85 @@ elif video_file_buffer is not None:
         os.unlink(web_ready_path)
     except:
         pass
+
+# ------------------------------------------------------------------------------
+# 情况三：【全新创意功能】赛博魔法师 RPG 对战模式
+# ------------------------------------------------------------------------------
+elif input_mode == "🧙‍♂️ 赛博魔法师 RPG 模式":
+    st.write("---")
+    st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 赛博魔法师 vs 深渊魔王 ⚡</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 绝对防御 | ✌️ 剪刀 = 极光斩(15点伤害) | 🖐️ 布 = 爆裂火球(25点伤害)</p>", unsafe_allow_html=True)
+
+    # 1. 提供拍照“结印”接口
+    spell_buffer = st.camera_input("📷 对准镜头结印（石头/剪刀/布），点击拍照释放魔法！")
+
+    # 2. 如果玩家拍了照，立马进入战斗结算
+    if spell_buffer is not None and st.session_state.rpg_player_hp > 0 and st.session_state.rpg_boss_hp > 0:
+        # 图像处理基本功
+        from PIL import Image
+        image_pil = Image.open(spell_buffer)
+        img_np = np.array(image_pil)
+        if img_np.shape[-1] == 4:
+            img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
+        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+        # 送入模型进行手势识别
+        with st.spinner('🔮 魔法吟唱中...'):
+            results = model(img_bgr, conf=0.5, iou=0.4, verbose=False)
+            boxes = results[0].boxes
+            num_hands = len(boxes)
+
+            if num_hands == 1:
+                top_class = int(boxes.cls[0].item())
+                import random
+                # 魔王每次随机对你造成 10~20 点伤害
+                boss_dmg = random.choice([10, 15, 20])
+
+                if top_class == 0:  # 出了石头
+                    st.session_state.rpg_log = f"🛡️ 你使用了【绝对防御】！完美挡下了魔王 {boss_dmg} 点伤害！"
+                elif top_class == 1:  # 出了剪刀
+                    st.session_state.rpg_boss_hp -= 15
+                    st.session_state.rpg_player_hp -= boss_dmg
+                    st.session_state.rpg_log = f"⚔️ 你使用了【极光斩】！魔王 -15血。魔王反击，你 -{boss_dmg}血！"
+                elif top_class == 2:  # 出了布
+                    st.session_state.rpg_boss_hp -= 25
+                    st.session_state.rpg_player_hp -= boss_dmg
+                    st.session_state.rpg_log = f"🔥 你使用了【爆裂火球】！魔王 -25血。魔王暴怒反击，你 -{boss_dmg}血！"
+
+                # 防止血量变成负数
+                st.session_state.rpg_player_hp = max(0, st.session_state.rpg_player_hp)
+                st.session_state.rpg_boss_hp = max(0, st.session_state.rpg_boss_hp)
+
+            elif num_hands == 0:
+                st.session_state.rpg_log = "⚠️ 魔法失效！没看清你的手势，请重新结印！"
+            else:
+                st.session_state.rpg_log = "⚠️ 魔法暴走！只能用单手释放魔法！"
+
+    # 3. 渲染酷炫的血条和战斗 UI (数值会实时更新)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"<h3 style='color: #4CAF50;'>🧙‍♂️ 你的血量: {st.session_state.rpg_player_hp}/100</h3>", unsafe_allow_html=True)
+        st.progress(st.session_state.rpg_player_hp / 100.0)
+    with col2:
+        st.markdown(f"<h3 style='color: #FF5722;'>👹 深渊魔王: {st.session_state.rpg_boss_hp}/100</h3>", unsafe_allow_html=True)
+        st.progress(st.session_state.rpg_boss_hp / 100.0)
+
+    # 战斗播报台
+    st.info(st.session_state.rpg_log)
+
+    # 4. 判断游戏结局与重置
+    if st.session_state.rpg_player_hp <= 0:
+        st.error("💀 你被深渊魔王击败了！大陆陷入了黑暗...")
+        if st.button("🔄 重新复活挑战"):
+            st.session_state.rpg_player_hp = 100
+            st.session_state.rpg_boss_hp = 100
+            st.session_state.rpg_log = "⚔️ 战斗重新开始！深渊魔王发出咆哮！"
+            st.rerun()
+    elif st.session_state.rpg_boss_hp <= 0:
+        st.success("🏆 奇迹发生！你成功击杀了深渊魔王！保卫了赛博大陆！")
+        st.balloons()
+        if st.button("🔄 再玩一次"):
+            st.session_state.rpg_player_hp = 100
+            st.session_state.rpg_boss_hp = 100
+            st.session_state.rpg_log = "⚔️ 战斗重新开始！新的魔王降临！"
+            st.rerun()
