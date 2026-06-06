@@ -283,7 +283,10 @@ elif input_mode == "🧙‍♂️ 赛博魔法师 RPG 模式":
     st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 绝对防御 | ✌️ 剪刀 = 极光斩(15点伤害) | 🖐️ 布 = 爆裂火球(25点伤害)</p>", unsafe_allow_html=True)
 
     # 1. 提供拍照“结印”接口
-    spell_buffer = st.camera_input("📷 对准镜头结印（石头/剪刀/布），点击拍照释放魔法！")
+    # 🌟 关键修改：用隐形的列把摄像头挤到中间缩小！比例是 1 : 1.5 : 1
+    cam_spacer_l, cam_col, cam_spacer_r = st.columns([1, 1.5, 1])
+    with cam_col:
+        spell_buffer = st.camera_input("📷 对准镜头结印（石头/剪刀/布），点击拍照释放魔法！")
 
     # 2. 如果玩家拍了照，立马进入战斗结算
     if spell_buffer is not None and st.session_state.rpg_player_hp > 0 and st.session_state.rpg_boss_hp > 0:
