@@ -79,17 +79,25 @@ st.write("---")
 # ==============================================================================
 # 4. 操作输入区（提供三种出招方式）
 # ==============================================================================
-input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "对战小游戏",], horizontal=True)
+# ==============================================================================
+# 4. 操作输入区（提供四种出招方式）
+# ==============================================================================
+input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "对战小游戏"], horizontal=True)
 
-img_file_buffer = None  
-video_file_buffer = None  
+img_file_buffer = None  # 初始化图片缓存变量
+video_file_buffer = None  # 初始化视频缓存变量
 
+# 🌟 这里是决定上面显示什么框的关键控制台
 if input_mode == "📂 上传本地图片":
     img_file_buffer = st.file_uploader("📂 放入比赛截图 (支持 jpg, png)", type=['jpg', 'jpeg', 'png'])
 elif input_mode == "📷 开启摄像头拍照":
     img_file_buffer = st.camera_input("📷 点击下方按钮拍摄你的手势")
-else:
+elif input_mode == "🎬 上传视频文件":
+    # 只有当精准选中“上传视频文件”时，才画出这个视频框
     video_file_buffer = st.file_uploader("🎬 放入视频文件 (支持 mp4, avi, mov)", type=['mp4', 'avi', 'mov'])
+    
+# 💡 注意：这里绝对不能写 else！
+# 选了“对战小游戏”后，上面什么框都不用画，直接让代码跑到最下面去触发游戏的 UI 即可！
 
 # ==============================================================================
 # 5. 识别与判断逻辑
@@ -279,8 +287,8 @@ elif video_file_buffer is not None:
 # ------------------------------------------------------------------------------
 elif input_mode == "对战小游戏":
     st.write("---")
-    st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 赛博魔法师 vs 深渊魔王 ⚡</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 绝对防御 | ✌️ 剪刀 = 极光斩(15点伤害) | 🖐️ 布 = 爆裂火球(25点伤害)</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 人类 vs 怪兽 ⚡</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 防御 | ✌️ 剪刀 = 普攻(15点伤害) | 🖐️ 布 = 火球(25点伤害)</p>", unsafe_allow_html=True)
 
     # 1. 提供拍照“结印”接口
     # 🌟 关键修改：用隐形的列把摄像头挤到中间缩小！比例是 1 : 1.5 : 1
