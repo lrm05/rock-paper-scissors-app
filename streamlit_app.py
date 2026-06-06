@@ -15,7 +15,6 @@ st.set_page_config(page_title="石头剪刀布识别", layout="wide")
 
 # ==============================================================================
 # 1. 加载 AI 模型（核心大脑）
-# ==============================================================================
 @st.cache_resource
 def load_model():
     model = YOLO('best.pt')  # 加载你训练好的目标检测模型权重文件 'best.pt'
@@ -25,20 +24,51 @@ def load_model():
 
 model = load_model()  # 实例化模型
 gesture_dict = {0: '石头', 1: '剪刀', 2: '布'}  # 建立一个数字到汉字的快捷字典
-# ==============================================================================
 # 🎮 【新增】RPG 游戏专用记忆变量（确保血量在刷新时不会丢失）
-# ==============================================================================
 if 'rpg_player_hp' not in st.session_state:
     st.session_state.rpg_player_hp = 100  # 玩家初始血量
 if 'rpg_boss_hp' not in st.session_state:
-    st.session_state.rpg_boss_hp = 100    # 魔王初始血量
+    st.session_state.rpg_boss_hp = 100  # 魔王初始血量
 if 'rpg_log' not in st.session_state:
     st.session_state.rpg_log = "⚔️ 战斗开始！深渊魔王发出咆哮！请用手势结印攻击！"
 
+# 💡 【新增】通用工具函数区 (DRY 代码精简原则)
+def process_image_buffer(buffer):
+    image_pil = Image.open(buffer)
+    img_np = np.array(image_pil)
+    if img_np.shape[-1] == 4:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+    return image_pil, img_bgr
 
-# ==============================================================================
+def ai_referee_judge(boxes):
+    num_hands = len(boxes)
+    if num_hands == 0:
+        return "🤔 哎呀，我好像没看清画面里有什么招式，要不要重拍一张？", "warning"
+    elif num_hands == 1:
+        top_class = int(boxes.cls[0].item())
+        solo_msgs = {0: "🪨 你出了【石头】！那我出【布】吧，哈哈，我赢啦！🎉",
+                     1: "✂️ 你出了【剪刀】！那我出【石头】吧，我又赢啦！😎",
+                     2: "🖐️ 你出了【布】！那我出【剪刀】，哈哈，我赢啦！🎉"}
+        return solo_msgs.get(top_class, "未知"), "info"
+    elif num_hands == 2:
+        box1, box2 = boxes[0], boxes[1]
+        x1_1, x1_2 = box1.xyxy[0][0].item(), box2.xyxy[0][0].item()
+        left_class, right_class = (int(box1.cls[0].item()), int(box2.cls[0].item())) if x1_1 < x1_2 else (int(box2.cls[0].item()), int(box1.cls[0].item()))
+        left_name, right_name = gesture_dict.get(left_class, "未知"), gesture_dict.get(right_class, "未知")
+
+        if left_class == right_class:
+            result = "🤝 哎呀，是平局，心有灵犀！"
+        elif (left_class == 0 and right_class == 1) or (left_class == 1 and right_class == 2) or (left_class == 2 and right_class == 0):
+            result = "🏆 裁判宣布：【左方】玩家获得胜利！"
+        else:
+            result = "🏆 裁判宣布：【右方】玩家获得胜利！"
+        return f"⚔️ 巅峰对决！左方出了【{left_name}】，右方出了【{right_name}】。\n\n{result}", "success"
+    else:
+        return f"😱 哇塞，画面里检测到了 {num_hands} 只手！裁判看不过来了，一次最多两人对战哦！", "error"
+
+
 # 2. 读取背景图并生成自定义 CSS 样式（视觉美化）
-# ==============================================================================
 def set_bg_and_css(image_path):
     if not os.path.exists(image_path):
         st.warning(f"⚠️ 找不到背景图片 {image_path}，将使用纯色背景。")
@@ -69,132 +99,73 @@ def set_bg_and_css(image_path):
 
 set_bg_and_css('bg.jpg')
 
-# ==============================================================================
 # 3. 页面标题区
-# ==============================================================================
 st.markdown("<h1 style='text-align: center; color: #333;'>✨ ✊✌️✋ 终极石头剪刀布对决 ✨</h1>", unsafe_allow_html=True)
 st.markdown("<h3 style='text-align: center; color: #555;'>单人挑战 AI，双人开启裁判模式！</h3>", unsafe_allow_html=True)
-st.write("---") 
+st.write("---")
 
-# ==============================================================================
 # 4. 操作输入区（智能合并升级版）
-# ==============================================================================
 # 🌟 选项减少到 3 个，将图片和视频合并为“上传本地文件”
-input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地文件 (图片/视频)", "📷 开启摄像头拍照", "对战小游戏"], horizontal=True)
+input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地文件 (图片/视频)", "📷 开启摄像头拍照", "对战小游戏"],
+                      horizontal=True)
 
 img_file_buffer = None  # 初始化图片缓存变量
 video_file_buffer = None  # 初始化视频缓存变量
 
 if input_mode == "📂 上传本地文件 (图片/视频)":
     # 🌟 核心合并：一个上传框，同时允许选择图片和视频的格式后缀！
-    mixed_buffer = st.file_uploader("📂 放入比赛截图或视频 (支持 jpg, png, mp4, avi, mov)", type=['jpg', 'jpeg', 'png', 'mp4', 'avi', 'mov'])
-    
+    mixed_buffer = st.file_uploader("📂 放入比赛截图或视频 (支持 jpg, png, mp4, avi, mov)",
+                                    type=['jpg', 'jpeg', 'png', 'mp4', 'avi', 'mov'])
+
     # 🧠 智能路由分发引擎
     if mixed_buffer is not None:
         # 提取文件的真实类型（比如 'image/jpeg' 或 'video/mp4'）
         if mixed_buffer.type.startswith('image'):
             img_file_buffer = mixed_buffer  # 偷偷把文件交给下方的【图片处理逻辑】
         elif mixed_buffer.type.startswith('video'):
-            video_file_buffer = mixed_buffer # 偷偷把文件交给下方的【视频处理逻辑】
+            video_file_buffer = mixed_buffer  # 偷偷把文件交给下方的【视频处理逻辑】
 
 elif input_mode == "📷 开启摄像头拍照":
     img_file_buffer = st.camera_input("📷 点击下方按钮拍摄你的手势")
 
-# ==============================================================================
-# 5. 识别与判断逻辑
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# 情况一：用户输入的是【图片】或者【摄像头拍照】
-# ------------------------------------------------------------------------------
+#  5. 识别与判断逻辑
+# 情况一：处理用户输入或拍摄的【图片】（极简重构版）
 if img_file_buffer is not None:
-    image_pil = Image.open(img_file_buffer)  
-    img_np = np.array(image_pil)  
-
-    if img_np.shape[-1] == 4:
-        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)  
-    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)  
+    # 🌟 调用工具函数，一行搞定格式转换
+    image_pil, img_bgr = process_image_buffer(img_file_buffer)
 
     spacer_left, img_col1, img_col2, spacer_right = st.columns([1, 2, 2, 1])
-
     with img_col1:
         st.image(image_pil, caption="你的招式", use_column_width=True)
 
     with st.spinner('🤖 AI裁判正在火眼金睛识别中...'):
         results = model(img_bgr, conf=0.5, iou=0.4)
-        res_image_bgr = results[0].plot()  
-        res_image_rgb = cv2.cvtColor(res_image_bgr, cv2.COLOR_BGR2RGB)  
+        res_image_rgb = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
 
-        boxes = results[0].boxes  
-        num_hands = len(boxes)  
-
-        if num_hands == 0:
-            msg = "🤔 哎呀，我好像没看清画面里有什么招式，要不要重拍一张？"
-            msg_type = "warning"
-        elif num_hands == 1:
-            top_class = int(boxes.cls[0].item())
-            if top_class == 0:  
-                msg = "🪨 你出了【石头】！那我出【布】吧，哈哈，我赢啦！🎉"
-            elif top_class == 1:  
-                msg = "✂️ 你出了【剪刀】！那我出【石头】吧，我又赢啦！😎"
-            elif top_class == 2:  
-                msg = "🖐️ 你出了【布】！那我出【剪刀】，哈哈，我赢啦！🎉"
-            msg_type = "info"
-        elif num_hands == 2:
-            box1, box2 = boxes[0], boxes[1]
-            x1_1, x1_2 = box1.xyxy[0][0].item(), box2.xyxy[0][0].item()
-
-            if x1_1 < x1_2:
-                left_class, right_class = int(box1.cls[0].item()), int(box2.cls[0].item())
-            else:
-                left_class, right_class = int(box2.cls[0].item()), int(box1.cls[0].item())
-
-            left_name = gesture_dict.get(left_class, "未知")
-            right_name = gesture_dict.get(right_class, "未知")
-
-            if left_class == right_class:
-                result = "🤝 哎呀，是平局，心有灵犀！"
-            elif (left_class == 0 and right_class == 1) or \
-                    (left_class == 1 and right_class == 2) or \
-                    (left_class == 2 and right_class == 0):
-                result = "🏆 裁判宣布：【左方】玩家获得胜利！"
-            else:
-                result = "🏆 裁判宣布：【右方】玩家获得胜利！"
-
-            msg = f"⚔️ 巅峰对决！左方出了【{left_name}】，右方出了【{right_name}】。\n\n{result}"
-            msg_type = "success"
-        else:
-            msg = f"😱 哇塞，画面里检测到了 {num_hands} 只手！裁判看不过来了，一次最多两人对战哦！"
-            msg_type = "error"
+        # 🌟 调用大脑函数，一行搞定所有裁判逻辑
+        msg, msg_type = ai_referee_judge(results[0].boxes)
 
     with img_col2:
         st.image(res_image_rgb, caption="AI 识别结果", use_column_width=True)
 
     st.write("---")
     st.subheader("🤖 裁判播报")
-    if msg_type == "warning":
-        st.warning(msg)  
-    elif msg_type == "error":
-        st.error(msg)  
-    elif msg_type == "success":
-        st.success(msg)  
-    else:
-        st.info(msg)  
+    # 🌟 Python 魔法：一行代码替代长篇的 if 弹窗判断
+    getattr(st, msg_type)(msg)
 
-# ------------------------------------------------------------------------------
 # 情况二：用户输入的是【视频文件】（🌟 离线高性能同步转码版-彻底消灭卡顿）
-# ------------------------------------------------------------------------------
 elif video_file_buffer is not None:
     st.write("---")
 
     video_title_placeholder = st.empty()
     video_title_placeholder.markdown(
-        "<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在全速解析并导出带框视频流...</h3>", unsafe_allow_html=True)
+        "<h3 style='text-align: center; color: #333;'>🎬 AI 裁判正在全速解析并导出带框视频流...</h3>",
+        unsafe_allow_html=True)
 
     # 1. 建立服务器后台临时输入文件
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
-    tfile.write(video_file_buffer.read())  
-    tfile.close()  
+    tfile.write(video_file_buffer.read())
+    tfile.close()
 
     # 2. 使用 OpenCV 打开这个原视频并获取它的关键属性
     cap = cv2.VideoCapture(tfile.name)
@@ -206,20 +177,20 @@ elif video_file_buffer is not None:
 
     # 3. 建立一个临时的【带框输出视频文件】
     out_tfile_path = tfile.name + "_out.mp4"
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v') # 使用标准 MP4 格式在后台默默写入
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 使用标准 MP4 格式在后台默默写入
     out = cv2.VideoWriter(out_tfile_path, fourcc, fps, (width, height))
 
     # 4. 在前端生成高级、直观的百分比进度条，安抚用户情绪
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    frame_count = 0  
+    frame_count = 0
 
     # 5. 后台全速闭眼运行（不跳帧、不缩放，保证画质完好无损）
     while cap.isOpened():
-        ret, frame = cap.read()  
+        ret, frame = cap.read()
         if not ret:
-            break  
+            break
 
         frame_count += 1
 
@@ -235,7 +206,9 @@ elif video_file_buffer is not None:
         # 实时刷新网页上的进度条百分比
         percent = min(int((frame_count / total_frames) * 100), 100)
         progress_bar.progress(percent)
-        status_text.markdown(f"<p style='text-align: center; color: #666;'>⚡ 正在精细追踪第 <b>{frame_count}</b> / {total_frames} 帧 ({percent}%)</p>", unsafe_allow_html=True)
+        status_text.markdown(
+            f"<p style='text-align: center; color: #666;'>⚡ 正在精细追踪第 <b>{frame_count}</b> / {total_frames} 帧 ({percent}%)</p>",
+            unsafe_allow_html=True)
 
     # 释放原视频和新视频的文件锁
     cap.release()
@@ -260,7 +233,9 @@ elif video_file_buffer is not None:
     with v_col:
         # 安全机制：如果 ffmpeg 转换顺利成功了
         if os.path.exists(web_ready_path) and os.path.getsize(web_ready_path) > 0:
-            video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ AI 裁判全片解析渲染完毕！</h3>", unsafe_allow_html=True)
+            video_title_placeholder.markdown(
+                "<h3 style='text-align: center; color: #4CAF50;'>✅ AI 裁判全片解析渲染完毕！</h3>",
+                unsafe_allow_html=True)
             with open(web_ready_path, "rb") as f:
                 video_bytes = f.read()
             # 调用 HTML5 顶级流媒体播放器，彻底解决网络卡顿
@@ -269,11 +244,14 @@ elif video_file_buffer is not None:
             st.success("🎉 奇迹见证！快点击上方播放按钮看看丝滑视频吧！")
         else:
             # 如果转换失败（通常是没安装 ffmpeg 依赖），给用户一个保底播放和提示
-            video_title_placeholder.markdown("<h3 style='text-align: center; color: #FF5722;'>⚠️ 视频转码遇到了一点小插曲</h3>", unsafe_allow_html=True)
+            video_title_placeholder.markdown(
+                "<h3 style='text-align: center; color: #FF5722;'>⚠️ 视频转码遇到了一点小插曲</h3>",
+                unsafe_allow_html=True)
             with open(out_tfile_path, "rb") as f:
                 video_bytes = f.read()
             st.video(video_bytes)
-            st.error("由于你没有在 GitHub 的 packages.txt 里添加 ffmpeg 驱动，导致视频黑屏或无法正常解码。请立即检查 packages.txt 配置文件。")
+            st.error(
+                "由于你没有在 GitHub 的 packages.txt 里添加 ffmpeg 驱动，导致视频黑屏或无法正常解码。请立即检查 packages.txt 配置文件。")
 
     # 9. 彻底粉碎删除服务器上产生的所有临时文件，不占内存
     try:
@@ -283,13 +261,13 @@ elif video_file_buffer is not None:
     except:
         pass
 
-# ------------------------------------------------------------------------------
 # 情况三：【全新创意功能】赛博魔法师 RPG 对战模式
-# ------------------------------------------------------------------------------
 elif input_mode == "对战小游戏":
     st.write("---")
     st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 人类 vs 怪兽 ⚡</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 防御 | ✌️ 剪刀 = 普攻(15点伤害) | 🖐️ 布 = 火球(25点伤害)</p>", unsafe_allow_html=True)
+    st.markdown(
+        "<p style='text-align: center; color: #666;'>规则：✊ 石头 = 防御 | ✌️ 剪刀 = 普攻(15点伤害) | 🖐️ 布 = 火球(25点伤害)</p>",
+        unsafe_allow_html=True)
 
     # 1. 提供拍照“结印”接口
     # 🌟 关键修改：用隐形的列把摄像头挤到中间缩小！比例是 1 : 1.5 : 1
@@ -299,13 +277,8 @@ elif input_mode == "对战小游戏":
 
     # 2. 如果玩家拍了照，立马进入战斗结算
     if spell_buffer is not None and st.session_state.rpg_player_hp > 0 and st.session_state.rpg_boss_hp > 0:
-        # 图像处理基本功
-        from PIL import Image
-        image_pil = Image.open(spell_buffer)
-        img_np = np.array(image_pil)
-        if img_np.shape[-1] == 4:
-            img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
-        img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+        # 🌟 一行代码完成魔法结印的图像格式化！
+        _, img_bgr = process_image_buffer(spell_buffer)
 
         # 送入模型进行手势识别
         with st.spinner('🔮 魔法吟唱中...'):
@@ -316,6 +289,7 @@ elif input_mode == "对战小游戏":
             if num_hands == 1:
                 top_class = int(boxes.cls[0].item())
                 import random
+
                 # 魔王每次随机对你造成 10~20 点伤害
                 boss_dmg = random.choice([10, 15, 20])
 
@@ -342,10 +316,12 @@ elif input_mode == "对战小游戏":
     # 3. 渲染酷炫的血条和战斗 UI (数值会实时更新)
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f"<h3 style='color: #4CAF50;'>🧙‍♂️ 你的血量: {st.session_state.rpg_player_hp}/100</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color: #4CAF50;'>🧙‍♂️ 你的血量: {st.session_state.rpg_player_hp}/100</h3>",
+                    unsafe_allow_html=True)
         st.progress(st.session_state.rpg_player_hp / 100.0)
     with col2:
-        st.markdown(f"<h3 style='color: #FF5722;'>👹 深渊魔王: {st.session_state.rpg_boss_hp}/100</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3 style='color: #FF5722;'>👹 深渊魔王: {st.session_state.rpg_boss_hp}/100</h3>",
+                    unsafe_allow_html=True)
         st.progress(st.session_state.rpg_boss_hp / 100.0)
 
     # 战斗播报台
