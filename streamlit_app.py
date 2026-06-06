@@ -277,7 +277,7 @@ elif video_file_buffer is not None:
 # ------------------------------------------------------------------------------
 # 情况三：【全新创意功能】赛博魔法师 RPG 对战模式
 # ------------------------------------------------------------------------------
-elif input_mode == "🧙‍♂️ 赛博魔法师 RPG 模式":
+elif input_mode == "对战小游戏":
     st.write("---")
     st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 赛博魔法师 vs 深渊魔王 ⚡</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #666;'>规则：✊ 石头 = 绝对防御 | ✌️ 剪刀 = 极光斩(15点伤害) | 🖐️ 布 = 爆裂火球(25点伤害)</p>", unsafe_allow_html=True)
