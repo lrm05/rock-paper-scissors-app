@@ -79,7 +79,7 @@ st.write("---")
 # ==============================================================================
 # 4. 操作输入区（提供三种出招方式）
 # ==============================================================================
-input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "🧙‍♂️ 赛博魔法师 RPG 模式"], horizontal=True)
+input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "🧙‍♂️ 赛博魔法师 RPG 模式", "🎨 钢铁侠 AR 隔空作画"], horizontal=True)
 
 img_file_buffer = None  
 video_file_buffer = None  
@@ -358,3 +358,129 @@ elif input_mode == "🧙‍♂️ 赛博魔法师 RPG 模式":
             st.session_state.rpg_boss_hp = 100
             st.session_state.rpg_log = "⚔️ 战斗重新开始！新的魔王降临！"
             st.rerun()
+
+# ------------------------------------------------------------------------------
+# 【王炸创意】钢铁侠 AR 隔空作画模式
+# ------------------------------------------------------------------------------
+elif input_mode == "🎨 钢铁侠 AR 隔空作画":
+    st.write("---")
+    st.markdown("<h2 style='text-align: center; color: #E91E63;'>✨ 钢铁侠 AR 虚空画板 ✨</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #666;'>玩法：请上传一段带有你挥动手势的短视频。<br>✌️ 剪刀 = 虚空作画 | ✊ 石头 = 变换画笔颜色 | 🖐️ 布 = 瞬间清空画板</p>", unsafe_allow_html=True)
+
+    # 专门给画画模式搞一个独立的视频上传框，防止跟前面混淆
+    draw_file_buffer = st.file_uploader("🎬 放入要进行隔空作画的视频 (支持 mp4, avi, mov)", type=['mp4', 'avi', 'mov'], key="draw_uploader")
+
+    if draw_file_buffer is not None:
+        import time
+        import os
+        
+        video_title_placeholder = st.empty()
+        video_title_placeholder.markdown("<h3 style='text-align: center; color: #333;'>🚀 AI 正在提取你的指尖三维坐标，渲染大片中...</h3>", unsafe_allow_html=True)
+
+        # 建立临时文件
+        tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
+        tfile.write(draw_file_buffer.read())
+        tfile.close()
+
+        cap = cv2.VideoCapture(tfile.name)
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        if fps == 0: fps = 24
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        out_tfile_path = tfile.name + "_draw_out.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(out_tfile_path, fourcc, fps, (width, height))
+
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        frame_count = 0
+
+        # 🌟 画板核心状态变量（魔法的起点） 🌟
+        draw_points = []  # 用来记录画笔移动时所有的 (X, Y) 坐标点
+        colors = [(0, 255, 255), (255, 0, 255), (0, 255, 0), (0, 165, 255)]  # 画笔颜色库：黄、紫、绿、橙 (OpenCV是BGR格式)
+        color_index = 0
+        current_color = colors[color_index]
+        last_gesture = -1  # 记录上一帧的手势，防止颜色疯狂鬼畜闪烁
+
+        # 后台全速闭眼渲染轨迹
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            frame_count += 1
+            results = model(frame, conf=0.5, iou=0.4, verbose=False)
+            boxes = results[0].boxes
+
+            # 拷贝一份干净的画面，不画传统的 YOLO 蓝色方框了，我们要画自己的艺术线条！
+            display_frame = frame.copy()
+
+            if len(boxes) > 0:
+                # 只找置信度最高的那只手（主手）
+                box = boxes[0]
+                cls_id = int(box.cls[0].item())
+
+                # 🌟 降维打击：提取检测框的中心点坐标！这才是真正的机器视觉空间定位！
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                center_x = int((x1 + x2) / 2)
+                center_y = int((y1 + y2) / 2)
+
+                # 根据手势进行魔法操作
+                if cls_id == 1:  # ✌️ 剪刀：追加坐标点，提笔作画
+                    draw_points.append((center_x, center_y))
+                elif cls_id == 2:  # 🖐️ 布：瞬间清空坐标点列表，擦除画板
+                    draw_points = []
+                elif cls_id == 0:  # ✊ 石头：变色 (且必须是刚由别的手势变成石头才变色，防连闪)
+                    if last_gesture != 0:
+                        color_index = (color_index + 1) % len(colors)
+                        current_color = colors[color_index]
+                
+                last_gesture = cls_id
+            else:
+                last_gesture = -1
+
+            # 🌟 核心魔法渲染：把历史轨迹全部连起来，画在当前的视频帧上！
+            for i in range(1, len(draw_points)):
+                # cv2.line 负责把相邻的两个坐标点连成一条发光的粗线
+                cv2.line(display_frame, draw_points[i-1], draw_points[i], current_color, thickness=8)
+                # 画一点圆润的关节，让线条看起来不像狗咬的一样锯齿状
+                cv2.circle(display_frame, draw_points[i], 4, (255, 255, 255), -1)
+
+            out.write(display_frame)
+
+            # 刷新进度条
+            percent = min(int((frame_count / total_frames) * 100), 100)
+            progress_bar.progress(percent)
+            status_text.markdown(f"<p style='text-align: center; color: #666;'>⚡ 正在进行光绘轨迹渲染 第 <b>{frame_count}</b> / {total_frames} 帧 ({percent}%)</p>", unsafe_allow_html=True)
+
+        cap.release()
+        out.release()
+
+        # 🌟 完美的工业级转码（带秒开流媒体参数）
+        web_ready_path = tfile.name + "_ready.mp4"
+        cmd = f"ffmpeg -y -i {out_tfile_path} -vcodec libx264 -preset veryfast -pix_fmt yuv420p -movflags +faststart {web_ready_path}"
+        os.system(cmd)
+
+        progress_bar.empty()
+        status_text.empty()
+
+        # 缩小播放器尺寸
+        v_spacer_l, v_col, v_spacer_r = st.columns([1, 1, 1])
+        with v_col:
+            if os.path.exists(web_ready_path) and os.path.getsize(web_ready_path) > 0:
+                video_title_placeholder.markdown("<h3 style='text-align: center; color: #4CAF50;'>✅ 钢铁侠 AR 光绘特效生成完毕！</h3>", unsafe_allow_html=True)
+                with open(web_ready_path, "rb") as f:
+                    st.video(f.read())
+                st.balloons()
+            else:
+                video_title_placeholder.markdown("<h3 style='text-align: center; color: #FF5722;'>⚠️ 渲染遇到了一点小插曲</h3>", unsafe_allow_html=True)
+
+        # 垃圾回收
+        try:
+            os.unlink(tfile.name)
+            os.unlink(out_tfile_path)
+            os.unlink(web_ready_path)
+        except:
+            pass
