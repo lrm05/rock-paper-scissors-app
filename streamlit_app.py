@@ -234,7 +234,8 @@ elif video_file_buffer is not None:
     status_text.empty()
 
     # 8. 居中排版，将最终处理好的丝滑视频完美展出
-    v_spacer_l, v_col, v_spacer_r = st.columns([1, 2, 1])
+    # 🌟 关键修改：把 [1, 2, 1] 改成 [1, 1, 1]
+    v_spacer_l, v_col, v_spacer_r = st.columns([1, 1, 1])
 
     with v_col:
         # 安全机制：如果 ffmpeg 转换顺利成功了
