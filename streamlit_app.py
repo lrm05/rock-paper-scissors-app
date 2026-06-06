@@ -79,7 +79,7 @@ st.write("---")
 # ==============================================================================
 # 4. 操作输入区（提供三种出招方式）
 # ==============================================================================
-input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "🧙‍♂️ 赛博魔法师 RPG 模式", "🎨 钢铁侠 AR 隔空作画", "💻 实时双屏画板 (本地演示专属)"], horizontal=True)
+input_mode = st.radio("请选择你的出招方式：", ["📂 上传本地图片", "📷 开启摄像头拍照", "🎬 上传视频文件", "🧙‍♂️ 赛博魔法师 RPG 模式", "🎨 钢铁侠 AR 隔空作画", "🌐 公网实时双屏画板"], horizontal=True)
 
 img_file_buffer = None  
 video_file_buffer = None  
@@ -487,100 +487,90 @@ elif input_mode == "🎨 钢铁侠 AR 隔空作画":
 
 
 # ------------------------------------------------------------------------------
-# 情况五：【终极大招】实时双屏隔空作画（左镜头，右画板）
+# 情况五：【终极大招】公网实时双屏画板（WebRTC 流媒体版）
 # ------------------------------------------------------------------------------
-elif input_mode == "💻 实时双屏画板 (本地演示专属)":
+elif input_mode == "🌐 公网实时双屏画板":
     st.write("---")
-    st.markdown("<h2 style='text-align: center; color: #E91E63;'>✨ 实时双屏虚空画板 ✨</h2>", unsafe_allow_html=True)
-    st.info("💡 终极提示：此模式需要连续调用电脑本地摄像头。在 PyCharm 终端运行本地网页时体验最完美，用于现场演示绝对震撼全场！")
+    st.markdown("<h2 style='text-align: center; color: #E91E63;'>✨ 公网实时双屏虚空画板 ✨</h2>", unsafe_allow_html=True)
+    st.info("💡 提示：点击下方 'START' 按钮，允许浏览器使用摄像头。由于公网传输需要跨越网络，请保持动作平稳。")
 
-    # 用一个开关按钮来控制摄像头的启停，防止网页卡死
-    run_camera = st.checkbox("🚀 点击开启/关闭 实时摄像头")
+    # 尝试导入我们刚才在 requirements.txt 里配置的视频流库
+    try:
+        from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, WebRtcMode, RTCConfiguration
+        import av
+    except ImportError:
+        st.error("⚠️ 缺少通信模块！请务必在仓库里创建 requirements.txt 并写入 streamlit-webrtc")
+        st.stop()
 
-    # 🌟 核心排版：左右各占 50%，左边放摄像头，右边放画板
-    cam_col, canvas_col = st.columns(2)
+    # 配置谷歌的公共 STUN 服务器，帮助公网穿透打通视频流
+    RTC_CONFIGURATION = RTCConfiguration(
+        {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    )
 
-    with cam_col:
-        st.markdown("<h4 style='text-align: center; color: #555;'>📷 你的视界</h4>", unsafe_allow_html=True)
-        cam_placeholder = st.empty()  # 摄像头动态刷新占位符
+    # 🌟 定义 WebRTC 专属的视频处理器类
+    class HandDrawProcessor(VideoProcessorBase):
+        def __init__(self):
+            # 初始化画板和状态变量
+            self.canvas = np.ones((480, 640, 3), dtype=np.uint8) * 255
+            self.draw_points = []
+            # OpenCV 画图默认是 BGR 格式：蓝、紫、绿、橙
+            self.colors = [(255, 0, 0), (255, 0, 255), (0, 255, 0), (0, 165, 255)]  
+            self.color_index = 0
+            self.current_color = self.colors[self.color_index]
+            self.last_gesture = -1
 
-    with canvas_col:
-        st.markdown("<h4 style='text-align: center; color: #555;'>🎨 魔法画板</h4>", unsafe_allow_html=True)
-        canvas_placeholder = st.empty()  # 画板动态刷新占位符
+        def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+            # 拿到浏览器传过来的每一帧视频画面
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1) # 镜像翻转，符合人体直觉
+            img = cv2.resize(img, (640, 480))
 
-    if run_camera:
-        import time
-        # cv2.VideoCapture(0) 会自动唤醒你电脑的默认摄像头
-        cap = cv2.VideoCapture(0)  
-
-        # 创建一张纯白色的画布 (高度 480，宽度 640，3 个颜色通道 RGB)
-        canvas = np.ones((480, 640, 3), dtype=np.uint8) * 255
-
-        draw_points = []
-        # 定义画笔颜色库：红、紫、绿、蓝 (这里直接用 RGB 格式供网页显示)
-        colors = [(255, 0, 0), (255, 0, 255), (0, 255, 0), (0, 165, 255)]  
-        color_index = 0
-        current_color = colors[color_index]
-        last_gesture = -1
-
-        # 开启实时捕捉死循环
-        while run_camera:
-            ret, frame = cap.read()
-            if not ret:
-                st.error("⚠️ 无法获取摄像头画面，请检查设备是否被其他软件占用！")
-                break
-
-            # 🌟 关键细节：镜像翻转画面！
-            # 不然你往左伸手，画面里往右，画画的时候会像照镜子一样反人类
-            frame = cv2.flip(frame, 1)
-            
-            # 统一缩小尺寸，保证运行速度飞快
-            frame = cv2.resize(frame, (640, 480))
-            
-            # 把当前画面喂给 YOLO
-            results = model(frame, conf=0.5, iou=0.4, verbose=False)
+            # YOLO 预测
+            results = model(img, conf=0.5, iou=0.4, verbose=False)
             boxes = results[0].boxes
-
-            # 把 OpenCV 默认的 BGR 色彩转成网页喜欢的 RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             if len(boxes) > 0:
                 box = boxes[0]
                 cls_id = int(box.cls[0].item())
-
-                # 提取手势中心点坐标
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
                 center_x = int((x1 + x2) / 2)
                 center_y = int((y1 + y2) / 2)
 
-                # 在左边摄像头的画面里，画一个炫酷的“动态准星”一直跟着你的手
-                cv2.circle(frame_rgb, (center_x, center_y), 10, current_color, -1)
-                cv2.circle(frame_rgb, (center_x, center_y), 15, (255, 255, 255), 2)
+                # 在原画面上画准星
+                cv2.circle(img, (center_x, center_y), 10, self.current_color, -1)
+                cv2.circle(img, (center_x, center_y), 15, (255, 255, 255), 2)
 
-                # 判定规则
-                if cls_id == 1:  # ✌️ 剪刀：追加坐标
-                    draw_points.append((center_x, center_y))
-                elif cls_id == 2:  # 🖐️ 布：瞬间清空所有点，并把画布重新刷白
-                    draw_points = []
-                    canvas = np.ones((480, 640, 3), dtype=np.uint8) * 255  
-                elif cls_id == 0:  # ✊ 石头：敲击一次，换一种颜色
-                    if last_gesture != 0:
-                        color_index = (color_index + 1) % len(colors)
-                        current_color = colors[color_index]
-                last_gesture = cls_id
+                # 动作逻辑判定
+                if cls_id == 1:    # 剪刀：画画
+                    self.draw_points.append((center_x, center_y))
+                elif cls_id == 2:  # 布：清空
+                    self.draw_points = []
+                    self.canvas = np.ones((480, 640, 3), dtype=np.uint8) * 255
+                elif cls_id == 0:  # 石头：变色
+                    if self.last_gesture != 0:
+                        self.color_index = (self.color_index + 1) % len(self.colors)
+                        self.current_color = self.colors[self.color_index]
+                self.last_gesture = cls_id
             else:
-                last_gesture = -1
+                self.last_gesture = -1
 
-            # 在右边的纯白画布上，把记录下来的所有坐标点连成线
-            for i in range(1, len(draw_points)):
-                # cv2.line 负责把相邻的两个坐标点连成一条发光的粗线
-                cv2.line(canvas, draw_points[i-1], draw_points[i], current_color, thickness=8)
-                # 画一点圆润的关节，让线条看起来平滑
-                cv2.circle(canvas, draw_points[i], 4, (255, 255, 255), -1)
+            # 在右边的虚拟画布上连线
+            for i in range(1, len(self.draw_points)):
+                cv2.line(self.canvas, self.draw_points[i-1], self.draw_points[i], self.current_color, thickness=8)
+                cv2.circle(self.canvas, self.draw_points[i], 4, (255, 255, 255), -1)
 
-            # 🌟 终极双屏输出：将处理好的两个画面同时高频推送到网页的两个盒子里！
-            cam_placeholder.image(frame_rgb, channels="RGB")
-            canvas_placeholder.image(canvas, channels="RGB")
+            # 🌟 绝杀：把左边摄像头画面 img 和右边画板 self.canvas 水平拼接成一张超宽图！
+            # 这样就能用一条数据通道完美传输双屏画面，性能极致拉满！
+            combined_img = np.hstack((img, self.canvas))
 
-        # 当用户取消勾选时，释放摄像头资源
-        cap.release()
+            return av.VideoFrame.from_ndarray(combined_img, format="bgr24")
+
+    # 启动工业级 WebRTC 播放器
+    webrtc_streamer(
+        key="hand-draw",
+        mode=WebRtcMode.SENDRECV,
+        rtc_configuration=RTC_CONFIGURATION,
+        video_processor_factory=HandDrawProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True, # 开启异步处理，让网页不卡死
+    )
