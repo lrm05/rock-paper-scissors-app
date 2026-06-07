@@ -277,9 +277,7 @@ elif input_mode == "对战小游戏":
     # 如果任意一方血量为0，则结束游戏并显示结果
     if st.session_state.rpg_player_hp == 0 or st.session_state.rpg_boss_hp == 0:
         is_win = st.session_state.rpg_boss_hp == 0  # 魔王血量为0表示玩家胜利
-        getattr(st, 'success' if is_win else 'error')(
-            "🏆 奇迹发生！击杀魔王！" if is_win else "💀 被魔王击败！"
-        )
+        getattr(st, 'success' if is_win else 'error')("🏆 奇迹发生！击杀魔王！" if is_win else "💀 被魔王击败！")
         if is_win:
             st.balloons()
         # 重置游戏按钮
