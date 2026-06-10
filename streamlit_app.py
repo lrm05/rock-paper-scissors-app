@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
-from ultralytics import YOLO  # YOLO 目标检测模型
-import cv2  # OpenCV 图像/视频处理
-import numpy as np  # 数组操作
-import os  # 文件操作
-import streamlit as st  # Web 应用框架
-from PIL import Image  # 图像读取与转换
-import base64  # 编码图片用于CSS背景
-import tempfile  # 临时文件管理
-import random  # 随机数（用于游戏伤害）
+from ultralytics import YOLO 
+import cv2
+import numpy as np
+import os
+import streamlit as st
+from PIL import Image
+import base64
+import tempfile
+import random 
 
 # 设置页面配置：标题、宽屏布局
 st.set_page_config(page_title="石头剪刀布识别", layout="wide")
 
-
-# ==============================================================================
-# 1. 初始化模型与记忆变量（极致压缩版）
+# 模型加载（带缓存）
 # 使用 Streamlit 的缓存装饰器，避免重复加载模型（提升性能）
 @st.cache_resource
 def load_model():
@@ -28,24 +26,21 @@ model = load_model()
 # 定义手势字典，便于快速获取名称
 gesture_dict = {0: '石头', 1: '剪刀', 2: '布'}
 
-# 极简优化 1：用循环一行初始化所有 RPG 变量，消灭 6 行啰嗦的 if
+# 用循环一行初始化所有 RPG 变量
 # 检查 session_state 中是否存在战斗相关变量，若不存在则赋初始值
 for k, v in [('rpg_player_hp', 100), ('rpg_boss_hp', 100), ('rpg_log', "⚔️ 战斗开始！深渊魔王发出咆哮！")]:
     if k not in st.session_state:
         st.session_state[k] = v
 
-
-# ==============================================================================
 # 2. 通用工具函数区
 def process_image_buffer(buffer):
-    image_pil = Image.open(buffer)  # 打开图片
-    img_np = np.array(image_pil)  # 转为 numpy 数组
+    image_pil = Image.open(buffer) 
+    img_np = np.array(image_pil)
     # 如果图片有透明度通道（RGBA），转换为 RGB（丢弃 alpha）
     if img_np.shape[-1] == 4:
         img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
     # YOLO 需要 BGR 格式，所以再次转换
     return image_pil, cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
-
 
 def ai_referee_judge(boxes):
     num_hands = len(boxes)  # 检测到的手的数量
@@ -107,8 +102,7 @@ def set_bg_and_css(image_path):
 # 设置背景图片（确保 'bg.jpg' 存在于当前目录）
 set_bg_and_css('bg.jpg')
 
-# ==============================================================================
-# 3. 页面布局与输入路由
+# 页面布局与输入路由
 # 标题
 st.markdown("<h1 style='text-align: center; color: #333;'>✨ ✊✌️✋ 终极石头剪刀布对决 ✨</h1>", unsafe_allow_html=True)
 st.write("---")
@@ -131,8 +125,7 @@ elif input_mode == "📷 开启摄像头拍照":
     # 调用摄像头拍照组件
     img_file_buffer = st.camera_input("📷 拍摄手势")
 
-# ==============================================================================
-# 4. 核心逻辑执行区
+# 核心逻辑执行区
 # 处理图片输入（包括上传和拍照）
 if img_file_buffer:
     # 转换图片为 PIL 和 BGR 格式
