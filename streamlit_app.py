@@ -9,10 +9,11 @@ import base64
 import tempfile
 import random 
 
+# ---------------------- 页面配置 ----------------------
 # 设置页面配置：标题、宽屏布局
 st.set_page_config(page_title="石头剪刀布识别", layout="wide")
 
-# 模型加载（带缓存）
+# ----------------------模型加载（带缓存）----------------------
 # 使用 Streamlit 的缓存装饰器，避免重复加载模型（提升性能）
 @st.cache_resource
 def load_model():
@@ -26,13 +27,14 @@ model = load_model()
 # 定义手势字典，便于快速获取名称
 gesture_dict = {0: '石头', 1: '剪刀', 2: '布'}
 
+# ---------------------- 游戏状态初始化（RPG 对战小游戏） ----------------------
 # 用循环一行初始化所有 RPG 变量
 # 检查 session_state 中是否存在战斗相关变量，若不存在则赋初始值
 for k, v in [('rpg_player_hp', 100), ('rpg_boss_hp', 100), ('rpg_log', "⚔️ 战斗开始！深渊魔王发出咆哮！")]:
     if k not in st.session_state:
         st.session_state[k] = v
 
-# 2. 通用工具函数区
+# ----------------------------- 通用工具函数 --------------------------------
 def process_image_buffer(buffer):
     image_pil = Image.open(buffer) 
     img_np = np.array(image_pil)
@@ -102,7 +104,7 @@ def set_bg_and_css(image_path):
 # 设置背景图片（确保 'bg.jpg' 存在于当前目录）
 set_bg_and_css('bg.jpg')
 
-# 页面布局与输入路由
+# ----------------------------- 页面布局与输入方式选择 ----------------------------
 # 标题
 st.markdown("<h1 style='text-align: center; color: #333;'>✨ ✊✌️✋ 终极石头剪刀布对决 ✨</h1>", unsafe_allow_html=True)
 st.write("---")
@@ -125,8 +127,7 @@ elif input_mode == "📷 开启摄像头拍照":
     # 调用摄像头拍照组件
     img_file_buffer = st.camera_input("📷 拍摄手势")
 
-# 核心逻辑执行区
-# 处理图片输入（包括上传和拍照）
+# ----------------------------- 图片输入处理 ---------------------------------
 if img_file_buffer:
     # 转换图片为 PIL 和 BGR 格式
     image_pil, img_bgr = process_image_buffer(img_file_buffer)
@@ -148,7 +149,7 @@ if img_file_buffer:
     # 根据消息类型显示不同样式的消息（info/success/error/warning）
     getattr(st, msg_type)(msg)
 
-# 处理视频输入
+# ----------------------------- 视频输入处理 ---------------------------------
 elif video_file_buffer:
     st.write("---")
     title_ph = st.empty()  # 占位符用于动态更新标题
@@ -220,7 +221,7 @@ elif video_file_buffer:
         except:
             pass  # 忽略删除失败（如文件不存在）
 
-# 处理对战小游戏（RPG 模式）
+# ----------------------------- 对战小游戏（RPG 模式） ---------------------------
 elif input_mode == "对战小游戏":
     st.write("---")
     st.markdown("<h2 style='text-align: center; color: #8A2BE2;'>⚡ 人类 vs 怪兽 ⚡</h2>", unsafe_allow_html=True)
